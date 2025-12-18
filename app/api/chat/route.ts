@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import { streamRAGResponse } from "@/lib/rag";
 
+// Configure for longer timeout on Vercel
+export const maxDuration = 60; // 60 seconds timeout
+export const dynamic = "force-dynamic"; // Disable caching
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -48,8 +52,9 @@ export async function POST(request: NextRequest) {
     return new Response(stream, {
       headers: {
         "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no", // Disable buffering for Nginx/proxies
       },
     });
   } catch (error) {

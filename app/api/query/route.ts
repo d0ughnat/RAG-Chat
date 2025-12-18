@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateRAGResponse } from "@/lib/rag";
 
+// Configure for longer timeout on Vercel
+export const maxDuration = 60; // 60 seconds timeout
+export const dynamic = "force-dynamic"; // Disable caching
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

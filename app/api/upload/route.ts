@@ -4,6 +4,10 @@ import { chunkDocument, ChunkConfig, DEFAULT_CHUNK_CONFIG } from "@/lib/chunker"
 import { generateEmbeddings } from "@/lib/embeddings";
 import { storeDocuments } from "@/lib/supabase";
 
+// Configure for longer timeout on Vercel (PDF processing can be slow)
+export const maxDuration = 60; // 60 seconds timeout
+export const dynamic = "force-dynamic"; // Disable caching
+
 // Maximum file size: 10MB
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 

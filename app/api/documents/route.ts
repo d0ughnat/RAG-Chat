@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { listDocuments, deleteDocumentByName } from "@/lib/supabase";
 
+// Disable caching for document list
+export const dynamic = "force-dynamic";
+
 // GET: List all documents
 export async function GET() {
   try {

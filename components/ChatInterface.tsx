@@ -70,10 +70,12 @@ export default function ChatInterface() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: userMessage.content }),
+        cache: "no-store", // Prevent caching
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get response");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error: ${response.status}`);
       }
 
       const reader = response.body?.getReader();
@@ -84,20 +86,26 @@ export default function ChatInterface() {
       }
 
       let sources: string[] = [];
+      let hasReceivedContent = false;
+      let buffer = ""; // Buffer for incomplete SSE messages
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        
+        // Keep the last incomplete line in buffer
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
 
-              if (data.type === "chunk") {
+              if (data.type === "chunk" && data.content) {
+                hasReceivedContent = true;
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantId
@@ -106,7 +114,7 @@ export default function ChatInterface() {
                   )
                 );
               } else if (data.type === "sources") {
-                sources = data.sources;
+                sources = data.sources || [];
               } else if (data.type === "done") {
                 setMessages((prev) =>
                   prev.map((msg) =>
@@ -116,11 +124,26 @@ export default function ChatInterface() {
               } else if (data.type === "error") {
                 throw new Error(data.error);
               }
-            } catch {
-              // Skip invalid JSON lines
+            } catch (parseError) {
+              // Skip invalid JSON lines, but log for debugging
+              console.debug("Skipped invalid SSE line:", line);
             }
           }
         }
+      }
+
+      // Handle case where no content was received
+      if (!hasReceivedContent) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? {
+                  ...msg,
+                  content: "I couldn't generate a response. Please try again.",
+                }
+              : msg
+          )
+        );
       }
     } catch (error) {
       setMessages((prev) =>
