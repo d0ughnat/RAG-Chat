@@ -89,6 +89,71 @@ export async function searchDocuments(
 }
 
 /**
+ * Perform keyword-based search for better hybrid retrieval
+ * Searches for documents containing any of the keywords
+ */
+export async function searchDocumentsByKeywords(
+  keywords: string[],
+  matchCount: number = 10,
+  filter: Record<string, string> = {}
+): Promise<MatchedDocument[]> {
+  const supabase = getSupabase();
+  
+  // Filter valid keywords
+  const validKeywords = keywords.filter(k => k.length > 2);
+  if (validKeywords.length === 0) return [];
+  
+  // Search for each keyword and collect results
+  const allResults: Map<number, { doc: MatchedDocument; matchCount: number }> = new Map();
+  
+  for (const keyword of validKeywords.slice(0, 5)) { // Limit to 5 keywords
+    let query = supabase
+      .from("documents")
+      .select("id, content, metadata")
+      .ilike("content", `%${keyword}%`);
+    
+    // Add filter if provided
+    if (filter.document_name) {
+      query = query.eq("metadata->>document_name", filter.document_name);
+    }
+    
+    const { data, error } = await query.limit(matchCount);
+    
+    if (error || !data) continue;
+    
+    for (const doc of data) {
+      if (allResults.has(doc.id)) {
+        // Increment match count for existing doc
+        allResults.get(doc.id)!.matchCount++;
+      } else {
+        // Add new doc
+        allResults.set(doc.id, {
+          doc: {
+            id: doc.id,
+            content: doc.content,
+            metadata: doc.metadata as DocumentMetadata,
+            similarity: 0.5, // Base score for keyword match
+          },
+          matchCount: 1
+        });
+      }
+    }
+  }
+  
+  // Calculate similarity based on keyword match ratio
+  const results: MatchedDocument[] = Array.from(allResults.values())
+    .map(({ doc, matchCount: mc }) => ({
+      ...doc,
+      // More keywords matched = higher score
+      similarity: Math.min(0.3 + (mc / validKeywords.length) * 0.5, 0.9)
+    }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, matchCount);
+  
+  return results;
+}
+
+/**
  * Delete all chunks for a specific document
  */
 export async function deleteDocumentByName(
